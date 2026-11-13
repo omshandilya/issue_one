@@ -17,9 +17,22 @@ export function enableBoxDrawing(map: L.Map, onBox: (bbox: number[]) => void): (
   };
   const up = (e: L.LeafletMouseEvent) => {
     if (!start || !rect) return;
-    const b = L.latLngBounds(start, e.latlng);
+    const end = e.latlng;
+    const south = Math.min(start.lat, end.lat);
+    const north = Math.max(start.lat, end.lat);
+    let west = Math.min(start.lng, end.lng);
+    let east = Math.max(start.lng, end.lng);
+    if (Math.abs(start.lng - end.lng) > 180) {
+      if (start.lng < end.lng) {
+        west = end.lng;
+        east = start.lng;
+      } else {
+        west = start.lng;
+        east = end.lng;
+      }
+    }
     start = null;
-    onBox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+    onBox([west, south, east, north]);
     stop();
   };
   const stop = () => {

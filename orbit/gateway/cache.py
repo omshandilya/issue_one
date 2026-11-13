@@ -11,7 +11,8 @@ class ResponseCache:
 
     @staticmethod
     def key(request):
-        return request.method + request.url.path + "?" + request.url.query
+        auth = request.headers.get("authorization") or ""
+        return request.method + request.url.path + "?" + request.url.query + " " + auth
 
     @staticmethod
     def max_age(cache_control):
@@ -27,6 +28,9 @@ class ResponseCache:
         return None
 
     def put(self, key, status, headers, body):
+        cc = (headers.get("cache-control") or "").lower()
+        if "no-store" in cc or "no-cache" in cc:
+            return
         age = self.max_age(headers.get("cache-control"))
         if age > 0:
             self.store[key] = (time.time() + age, status, headers, body)

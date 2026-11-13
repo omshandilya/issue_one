@@ -26,7 +26,17 @@ def parse_bbox(text):
         assert len(a) == 4
     except Exception:
         raise HTTPException(status_code=400, detail="bbox must be min_lon,min_lat,max_lon,max_lat")
-    return a
+    min_lon, min_lat, max_lon, max_lat = a
+    if max_lon - min_lon >= 360:
+        min_lon, max_lon = -180.0, 180.0
+    else:
+        def norm(lon):
+            if -180.0 <= lon <= 180.0:
+                return lon
+            w = ((lon + 180.0) % 360.0) - 180.0
+            return 180.0 if w == -180.0 and lon > 0 else w
+        min_lon, max_lon = norm(min_lon), norm(max_lon)
+    return [min_lon, min_lat, max_lon, max_lat]
 
 
 def parse_time(text):
@@ -66,7 +76,10 @@ def search(response: Response, bbox: str = Query(...), datetime_range: str = Que
         q += " ORDER BY acquired DESC, id"
         rows = [r for r in db.execute(q, args).fetchall() if can_see(user[1], r["restricted_unit"])]
     page = rows[offset:offset + limit]
-    response.headers["Cache-Control"] = "public, max-age=60"
+    has_restricted = any(r["restricted_unit"] is not None for r in rows)
+    scope = "private" if has_restricted or user[1] is not None else "public"
+    response.headers["Cache-Control"] = f"{scope}, max-age=60"
+    response.headers["Vary"] = "Authorization"
     return {"type": "FeatureCollection", "numberMatched": len(rows), "numberReturned": len(page),
             "features": [to_feature(r, user[1]) for r in page]}
 
@@ -76,5 +89,7 @@ def scene(scene_id: str, response: Response, user=Depends(current_user)):
     row = get_db().execute("SELECT * FROM scenes WHERE id = ?", (scene_id,)).fetchone()
     if row is None or not can_see(user[1], row["restricted_unit"]):
         raise HTTPException(status_code=404, detail="scene not found")
-    response.headers["Cache-Control"] = "public, max-age=60"
+    scope = "public" if row["restricted_unit"] is None else "private"
+    response.headers["Cache-Control"] = f"{scope}, max-age=60"
+    response.headers["Vary"] = "Authorization"
     return to_feature(row, user[1])
