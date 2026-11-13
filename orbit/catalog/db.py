@@ -47,6 +47,9 @@ def footprint_geometry(minx, miny, maxx, maxy):
 
 
 def add_scene(db, scene_id, name, acquired, minx, miny, maxx, maxy, restricted_unit=None, file_path=None, size_bytes=None):
+    # Clean up any existing rtree/index entries for this scene_id to prevent duplicates on re-import
+    db.execute("DELETE FROM scene_rtree WHERE rid IN (SELECT rid FROM scene_index WHERE scene_id = ?)", (scene_id,))
+    db.execute("DELETE FROM scene_index WHERE scene_id = ?", (scene_id,))
     db.execute(
         "INSERT OR REPLACE INTO scenes (id, name, acquired, minx, miny, maxx, maxy, restricted_unit, footprint, file_path, size_bytes) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?)",

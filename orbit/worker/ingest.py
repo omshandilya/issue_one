@@ -42,20 +42,34 @@ def ingest(src, scene_id):
     size = os.path.getsize(src)
     final_path = f"{config.FILES_DIR}/{scene_id}.bin"
     os.makedirs(config.FILES_DIR, exist_ok=True)
-
-    db = dbmod.connect()
-    dbmod.init_db(db)
-    # Make the scene visible, then copy its data in.
-    dbmod.add_scene(db, f"{scene_id}-{uuid.uuid4().hex[:6]}", meta.get("name", scene_id), meta["acquired"],
-                    *meta["bbox"], file_path=final_path, size_bytes=size)
-    db.commit()
+    temp_path = f"{final_path}.tmp.{os.getpid()}"
 
     written = 0
-    with open(final_path, "wb") as out:
-        for chunk in read_chunks(src):
-            fault_hook(written)
-            out.write(chunk)
-            written += len(chunk)
+    try:
+        with open(temp_path, "wb") as out:
+            for chunk in read_chunks(src):
+                fault_hook(written)
+                out.write(chunk)
+                written += len(chunk)
+            out.flush()
+            os.fsync(out.fileno())
+    except Exception:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        raise
+
+    # Atomically place the fully-written file
+    os.replace(temp_path, final_path)
+
+    # Record the scene in the database and commit only after the file is complete
+    db = dbmod.connect()
+    dbmod.init_db(db)
+    dbmod.add_scene(db, scene_id, meta.get("name", scene_id), meta["acquired"],
+                    *meta["bbox"], file_path=final_path, size_bytes=size)
+    db.commit()
     print(f"imported {scene_id}: {written} bytes")
 
 
