@@ -16,7 +16,10 @@ export function showResults(group: L.LayerGroup, features: Feature[], onPick: (i
   const bounds = L.latLngBounds([]);
   for (const f of features) {
     for (const ring of rings(f)) {
-      const poly = L.polygon(ring as L.LatLngExpression[], STYLE);
+      // GeoJSON ring coordinates are [lon, lat], but Leaflet expects [lat, lon]
+      const latlngs = ring.map(([lon, lat]) => [lat, lon] as L.LatLngTuple);
+      const poly = L.polygon(latlngs, STYLE);
+      (poly as any).featureId = f.id;
       poly.on("click", () => onPick(f.id));
       poly.bindTooltip(f.properties.name);
       poly.addTo(group);
@@ -29,12 +32,9 @@ export function showResults(group: L.LayerGroup, features: Feature[], onPick: (i
 // Highlights the scene the user picked in the list.
 export function highlight(group: L.LayerGroup, features: Feature[], id: string | null) {
   group.eachLayer((layer) => {
-    (layer as L.Polygon).setStyle(STYLE);
+    const poly = layer as L.Polygon & { featureId?: string };
+    if (poly.setStyle) {
+      poly.setStyle(poly.featureId === id ? PICKED : STYLE);
+    }
   });
-  if (!id) return;
-  const f = features.find((x) => x.id === id);
-  if (!f) return;
-  for (const ring of rings(f)) {
-    L.geoJSON({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } } as any, { style: PICKED }).addTo(group);
-  }
 }
