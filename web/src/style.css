@@ -1,0 +1,16 @@
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; font-family: system-ui, sans-serif; font-size: 14px; background: #fff; color: #1b1b1b; }
+.app { display: grid; height: 100%; grid-template-columns: 280px 1fr 300px; grid-template-rows: 44px 1fr; }
+header { grid-column: 1 / 4; background: #0d2b45; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+aside { padding: 10px; overflow: auto; border-right: 1px solid #ddd; background: #fafafa; }
+main { min-height: 0; }
+.detail { padding: 10px; border-left: 1px solid #ddd; overflow: auto; background: #fafafa; }
+.detailmap { height: 220px; border: 1px solid #ccc; }
+button { margin: 2px 4px 2px 0; padding: 6px 10px; cursor: pointer; background: #fff; color: #1b1b1b; border: 1px solid #999; border-radius: 3px; }
+.status { color: #555; }
+.results { list-style: none; padding: 0; margin: 0; }
+.results li { padding: 6px 8px; border-bottom: 1px solid #eee; cursor: pointer; }
+.results li.picked { background: #fff3e0; }
+dl { display: grid; grid-template-columns: 110px 1fr; gap: 4px 8px; }
+dt { color: #666; } dd { margin: 0; }

@@ -1,0 +1,35 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Node & Frontend dependencies/builds
+node_modules/
+web/node_modules/
+dist/
+web/dist/
+
+# Runtime demo data & generated files (created by python tasks.py seed)
+data/
+
+# Packaging builds & binaries
+package/
+packaging/*.zip
+packaging/*.exe
+
+# Editor & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
