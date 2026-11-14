@@ -1,5 +1,8 @@
 // Talks to the portal gateway.
-export const API = "http://127.0.0.1:8000";
+export const API =
+  typeof window !== "undefined" && window.location.port !== "5173"
+    ? window.location.origin
+    : "http://127.0.0.1:8000";
 
 export type Feature = {
   type: "Feature";
@@ -25,4 +28,35 @@ export async function search(bbox: number[], token?: string): Promise<SearchResu
   const r = await fetch(`${API}/search?bbox=${bbox.join(",")}&limit=200`, { headers: authHeaders(token) });
   if (!r.ok) throw new Error(`search failed: ${r.status}`);
   return r.json();
+}
+
+export type PolygonSearchResult = SearchResult & { search_id: string };
+
+export async function searchPolygon(polygon: { type: "Polygon"; coordinates: number[][][] }, token?: string): Promise<PolygonSearchResult> {
+  const r = await fetch(`${API}/search/polygon?limit=200`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(polygon),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.detail || `polygon search failed: ${r.status}`);
+  }
+  return r.json();
+}
+
+export async function downloadExport(searchId: string, format: "geojson" | "csv", token?: string) {
+  const r = await fetch(`${API}/export/${searchId}?format=${format}`, {
+    headers: authHeaders(token),
+  });
+  if (!r.ok) throw new Error(`Export failed: ${r.status}`);
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `export-${searchId}.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

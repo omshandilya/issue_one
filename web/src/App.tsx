@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import { search, USERS } from "./api";
+import { search, searchPolygon, downloadExport, USERS } from "./api";
 import type { Feature } from "./api";
 import { showResults, highlight } from "./map/resultsLayer";
 import { showDetail } from "./map/detailMap";
 import { enableBoxDrawing } from "./map/drawBox";
+import { enablePolygonDrawing, GeoJSONPolygon } from "./map/drawPolygon";
 
 const AREAS: Record<string, number[]> = {
   "Mumbai port": [72.7, 18.8, 73.0, 19.1],
@@ -25,7 +26,8 @@ export default function App() {
   const [features, setFeatures] = useState<Feature[]>([]);
   const [total, setTotal] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
-  const [status, setStatus] = useState("Draw a box on the map or choose an area.");
+  const [searchId, setSearchId] = useState<string | null>(null);
+  const [status, setStatus] = useState("Draw a box or polygon on the map or choose an area.");
   const token = USERS[user];
 
   useEffect(() => {
@@ -42,11 +44,28 @@ export default function App() {
 
   async function runSearch(bbox: number[]) {
     setStatus("Searching…");
+    setSearchId(null);
     try {
       const r = await search(bbox, token);
       setFeatures(r.features);
       setTotal(r.numberMatched);
       setPicked(null);
+      const bounds = showResults(resultsGroup.current, r.features, (id) => setPicked(id));
+      if (bounds.isValid()) main.current!.fitBounds(bounds, { padding: [20, 20] });
+      setStatus(`${r.numberMatched} scenes found.`);
+    } catch (e) {
+      setStatus(String(e));
+    }
+  }
+
+  async function runPolygonSearch(poly: GeoJSONPolygon) {
+    setStatus("Searching polygon…");
+    try {
+      const r = await searchPolygon(poly, token);
+      setFeatures(r.features);
+      setTotal(r.numberMatched);
+      setPicked(null);
+      setSearchId(r.search_id);
       const bounds = showResults(resultsGroup.current, r.features, (id) => setPicked(id));
       if (bounds.isValid()) main.current!.fitBounds(bounds, { padding: [20, 20] });
       setStatus(`${r.numberMatched} scenes found.`);
@@ -67,6 +86,12 @@ export default function App() {
     stopDraw.current = enableBoxDrawing(main.current!, (bbox) => { stopDraw.current = null; runSearch(bbox); });
   }
 
+  function drawPolygon() {
+    stopDraw.current?.();
+    setStatus("Click points on the map. Double-click to finish.");
+    stopDraw.current = enablePolygonDrawing(main.current!, (poly) => { stopDraw.current = null; runPolygonSearch(poly); });
+  }
+
   const pickedFeature = features.find((f) => f.id === picked);
   return (
     <div className="app">
@@ -80,11 +105,20 @@ export default function App() {
         </span>
       </header>
       <aside>
-        <button onClick={drawBox}>Draw search box</button>
+        <div style={{ display: "flex", gap: "6px" }}>
+          <button onClick={drawBox} style={{ flex: 1 }}>Draw box</button>
+          <button onClick={drawPolygon} style={{ flex: 1 }}>Draw polygon</button>
+        </div>
         <div className="areas">
           {Object.entries(AREAS).map(([name, bbox]) => <button key={name} onClick={() => runSearch(bbox)}>{name}</button>)}
         </div>
         <p className="status">{status}</p>
+        {searchId && (
+          <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
+            <button onClick={() => downloadExport(searchId, "geojson", token)} style={{ flex: 1, fontSize: "0.8em" }}>Export GeoJSON</button>
+            <button onClick={() => downloadExport(searchId, "csv", token)} style={{ flex: 1, fontSize: "0.8em" }}>Export CSV</button>
+          </div>
+        )}
         <ul className="results">
           {features.map((f) => (
             <li key={f.id} className={f.id === picked ? "picked" : ""} onClick={() => setPicked(f.id)}>

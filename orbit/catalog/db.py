@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS scenes (
 CREATE VIRTUAL TABLE IF NOT EXISTS scene_rtree USING rtree(rid, minx, maxx, miny, maxy);
 CREATE TABLE IF NOT EXISTS scene_index (rid INTEGER PRIMARY KEY, scene_id TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS scenes_acquired ON scenes(acquired);
+CREATE TABLE IF NOT EXISTS polygon_searches (
+    search_id       TEXT PRIMARY KEY,
+    user_name       TEXT,
+    unit            TEXT,
+    created_at      TEXT NOT NULL,
+    scene_ids       TEXT NOT NULL
+);
 """
 
 

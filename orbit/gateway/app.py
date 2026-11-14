@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from orbit import config
 from orbit.gateway import range_proxy
@@ -23,7 +24,7 @@ async def lifespan(app):
 
 
 app = FastAPI(title="Orbit Portal gateway", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_headers=["authorization", "range"], expose_headers=["content-range", "x-cache"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_headers=["*"], expose_headers=["content-range", "x-cache", "content-disposition"])
 
 
 async def forward(request: Request, base_url: str):
@@ -36,8 +37,14 @@ async def forward(request: Request, base_url: str):
             return Response(body, status_code=status, headers={**headers, "X-Cache": "HIT"})
     url = base_url + request.url.path + ("?" + request.url.query if request.url.query else "")
     auth = request.headers.get("authorization")
-    up = await client.request(request.method, url, headers={"authorization": auth} if auth else {})
-    headers = {k: v for k, v in up.headers.items() if k.lower() in ("content-type", "cache-control")}
+    req_headers = {}
+    if auth:
+        req_headers["authorization"] = auth
+    if request.headers.get("content-type"):
+        req_headers["content-type"] = request.headers.get("content-type")
+    body = await request.body() if request.method in ("POST", "PUT", "PATCH") else None
+    up = await client.request(request.method, url, headers=req_headers, content=body)
+    headers = {k: v for k, v in up.headers.items() if k.lower() in ("content-type", "cache-control", "vary")}
     if request.method == "GET" and up.status_code == 200:
         cache.put(key, up.status_code, headers, up.content)
     return Response(up.content, status_code=up.status_code, headers={**headers, "X-Cache": "MISS"})
@@ -89,3 +96,44 @@ async def scene_checksum(request: Request, scene_id: str):
 @app.get("/scenes/{scene_id}")
 async def scene(request: Request, scene_id: str):
     return await forward(request, config.CATALOG_URL)
+
+
+@app.post("/search/polygon")
+async def search_polygon(request: Request):
+    return await forward(request, config.CATALOG_URL)
+
+
+@app.get("/export/{search_id}")
+async def export(request: Request, search_id: str):
+    url = f"{config.CATALOG_URL}/export/{search_id}" + ("?" + request.url.query if request.url.query else "")
+    auth = request.headers.get("authorization")
+    req_headers = {"authorization": auth} if auth else {}
+    req = client.build_request("GET", url, headers=req_headers)
+    res = await client.send(req, stream=True)
+    if res.status_code != 200:
+        content = await res.aread()
+        await res.aclose()
+        return Response(content, status_code=res.status_code, media_type=res.headers.get("content-type"))
+
+    async def body_stream():
+        async for chunk in res.aiter_bytes():
+            yield chunk
+        await res.aclose()
+
+    media_type = res.headers.get("content-type", "application/octet-stream")
+    disp = res.headers.get("content-disposition")
+    resp_headers = {}
+    if disp:
+        resp_headers["content-disposition"] = disp
+    return StreamingResponse(body_stream(), status_code=200, media_type=media_type, headers=resp_headers)
+
+
+WEB_DIR = os.environ.get("ORBIT_WEB_DIR")
+if not WEB_DIR:
+    candidate = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../web/dist"))
+    if os.path.exists(candidate):
+        WEB_DIR = candidate
+
+if WEB_DIR and os.path.exists(WEB_DIR):
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
