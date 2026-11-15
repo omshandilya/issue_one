@@ -67,6 +67,11 @@ export default function App() {
       setPicked(null);
       setSearchId(r.search_id);
       const bounds = showResults(resultsGroup.current, r.features, (id) => setPicked(id));
+      const polyLayer = L.geoJSON(poly as any, {
+        style: { color: "#2e7d32", weight: 2, dashArray: "4", fillOpacity: 0.08 }
+      });
+      polyLayer.addTo(resultsGroup.current);
+      bounds.extend(polyLayer.getBounds());
       if (bounds.isValid()) main.current!.fitBounds(bounds, { padding: [20, 20] });
       setStatus(`${r.numberMatched} scenes found.`);
     } catch (e) {
@@ -99,7 +104,17 @@ export default function App() {
         <b>Orbit Portal</b>
         <span className="who">
           Signed in as&nbsp;
-          <select value={user} onChange={(e) => setUser(e.target.value)}>
+          <select value={user} onChange={(e) => {
+            const nextUser = e.target.value;
+            setUser(nextUser);
+            setPicked(null);
+            setFeatures([]);
+            setTotal(0);
+            setSearchId(null);
+            resultsGroup.current.clearLayers();
+            detailGroup.current.clearLayers();
+            setStatus(`Switched account to ${nextUser}. Choose an area or draw to search.`);
+          }}>
             {Object.keys(USERS).map((u) => <option key={u}>{u}</option>)}
           </select>
         </span>

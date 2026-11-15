@@ -196,6 +196,15 @@ def validate_polygon(geom):
                 raise ValueError(f"Ring {idx} coordinates must be numbers [lon, lat]")
         if ring[0][0] != ring[-1][0] or ring[0][1] != ring[-1][1]:
             raise ValueError(f"Ring {idx} must be closed (first and last coordinate must match)")
+        # Collapse any immediate consecutive duplicate points
+        cleaned = []
+        for pt in ring:
+            if not cleaned or (cleaned[-1][0] != pt[0] or cleaned[-1][1] != pt[1]):
+                cleaned.append(pt)
+        if len(cleaned) < 4 or cleaned[0] != cleaned[-1]:
+            cleaned.append(cleaned[0])
+        ring = cleaned
+
         distinct = set((pt[0], pt[1]) for pt in ring[:-1])
         if len(distinct) < 3:
             raise ValueError(f"Ring {idx} must have at least 3 distinct vertices")

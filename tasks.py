@@ -20,19 +20,41 @@ SERVICES = [
 ]
 
 
+def get_python():
+    venv_py_win = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
+    if os.path.exists(venv_py_win):
+        return venv_py_win
+    venv_py_unix = os.path.join(os.path.dirname(__file__), ".venv", "bin", "python")
+    if os.path.exists(venv_py_unix):
+        return venv_py_unix
+    return sys.executable
+
+
 def seed():
     from orbit.catalog import seed as seeder
     print("seeded", seeder.seed(), "scenes")
 
 
 def run():
-    for name, app, port in SERVICES:
-        cmd = f'"{sys.executable}" -m uvicorn {app} --port {port}'
-        subprocess.Popen(cmd, shell=True)
-        print(f"started {name} on port {port}")
-    print(f"portal is up: http://127.0.0.1:{config.GATEWAY_PORT}  (press Ctrl+C to stop)")
-    while True:
-        time.sleep(1)
+    py = get_python()
+    procs = []
+    try:
+        for name, app, port in SERVICES:
+            cmd = f'"{py}" -m uvicorn {app} --port {port}'
+            p = subprocess.Popen(cmd, shell=True)
+            procs.append(p)
+            print(f"started {name} on port {port}")
+        print(f"portal is up: http://127.0.0.1:{config.GATEWAY_PORT}  (press Ctrl+C to stop)")
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nStopping services...")
+    finally:
+        for p in procs:
+            try:
+                p.terminate()
+            except Exception:
+                pass
 
 
 def make_incoming():
@@ -46,12 +68,14 @@ def make_incoming():
 
 
 def ingest():
+    py = get_python()
     src, scene_id = sys.argv[2], sys.argv[3]
-    sys.exit(subprocess.call(f'"{sys.executable}" -m orbit.worker.ingest {src} {scene_id}', shell=True))
+    sys.exit(subprocess.call(f'"{py}" -m orbit.worker.ingest {src} {scene_id}', shell=True))
 
 
 def test():
-    sys.exit(subprocess.call(f'"{sys.executable}" -m pytest -q tests', shell=True))
+    py = get_python()
+    sys.exit(subprocess.call(f'"{py}" -m pytest -q tests', shell=True))
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 """Gateway: the one address analysts use. Passes requests to the catalog and tile services and caches answers."""
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -18,13 +19,22 @@ client = None
 @asynccontextmanager
 async def lifespan(app):
     global client
+    # Suppress harmless Windows-specific asyncio connection reset noise on aborted browser requests
+    loop = asyncio.get_running_loop()
+    def handler(l, ctx):
+        exc = ctx.get("exception")
+        if isinstance(exc, (ConnectionResetError, ConnectionAbortedError)):
+            return
+        l.default_exception_handler(ctx)
+    loop.set_exception_handler(handler)
+
     client = httpx.AsyncClient(timeout=30)
     yield
     await client.aclose()
 
 
 app = FastAPI(title="Orbit Portal gateway", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_headers=["*"], expose_headers=["content-range", "x-cache", "content-disposition"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], expose_headers=["content-range", "x-cache", "content-disposition"])
 
 
 async def forward(request: Request, base_url: str):

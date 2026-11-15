@@ -49,12 +49,24 @@ export function enablePolygonDrawing(map: L.Map, onPolygon: (poly: GeoJSONPolygo
 
   const onDblClick = (e: L.LeafletMouseEvent) => {
     L.DomEvent.stop(e);
-    if (points.length < 3) {
+    // Deduplicate consecutive points (double click often emits 2 close click events)
+    const deduped: L.LatLng[] = [];
+    for (const p of points) {
+      if (deduped.length === 0) {
+        deduped.push(p);
+      } else {
+        const last = deduped[deduped.length - 1];
+        if (Math.abs(last.lat - p.lat) > 1e-5 || Math.abs(last.lng - p.lng) > 1e-5) {
+          deduped.push(p);
+        }
+      }
+    }
+    if (deduped.length < 3) {
       stop();
       return;
     }
     // Convert points to [lon, lat] GeoJSON format and close ring
-    const coords: number[][] = points.map((p) => [Number(p.lng.toFixed(5)), Number(p.lat.toFixed(5))]);
+    const coords: number[][] = deduped.map((p) => [Number(p.lng.toFixed(5)), Number(p.lat.toFixed(5))]);
     coords.push([...coords[0]]);
 
     stop();
